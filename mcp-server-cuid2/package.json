@@ -1,0 +1,29 @@
+{
+  "name": "mcp-server-cuid2",
+  "private": true,
+  "description": "MCP server for generating CUID2 identifiers",
+  "keywords": [
+    "mcp",
+    "cuid2"
+  ],
+  "type": "module",
+  "scripts": {
+    "check": "biome check",
+    "dev": "bun run --watch index.ts",
+    "fix": "biome check --write",
+    "ncu": "bunx npm-check-updates",
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.9.0",
+    "@paralleldrive/cuid2": "2.2.2",
+    "typescript": "5.8.3",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/bun": "1.2.8",
+    "@types/node": "22.14.0"
+  },
+  "module": "index.ts"
+}
