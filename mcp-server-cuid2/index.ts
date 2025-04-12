@@ -16,7 +16,7 @@ const server = new McpServer({
 });
 
 server.tool(
-  "generate-cuid2",
+  "generate_cuid2",
   {
     length: z.number().min(1).max(128),
     count: z.number().min(1).max(100),
@@ -29,7 +29,7 @@ server.tool(
       content: [
         {
           type: "text",
-          text: JSON.stringify(Array.from({ length: count }, () => createId())),
+          text: Array.from({ length: count }, () => createId()).join("\n"),
         },
       ],
     };
