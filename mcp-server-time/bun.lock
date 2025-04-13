@@ -7,7 +7,7 @@
         "@modelcontextprotocol/sdk": "1.9.0",
         "@paralleldrive/cuid2": "2.2.2",
         "chrono-node": "2.8.0",
-        "temporal-polyfill": "^0.3.0",
+        "temporal-polyfill": "0.3.0",
         "typescript": "^5",
         "zod": "3.24.2",
       },
