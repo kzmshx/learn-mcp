@@ -14,11 +14,29 @@ const envSchema = z.object({
 });
 const env = envSchema.parse(process.env);
 const STORAGE_DIR = path.resolve(env.STORAGE_DIR);
-const STATE_DIR = path.join(STORAGE_DIR, ".state");
 
 /**
  * State
  */
+
+const backgroundSchema = z.object({
+  color: z.string().optional(),
+  transparency: z.number().min(0).max(100).optional(),
+});
+
+const slideNumberSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  color: z.string().optional(),
+  fontFace: z.string().optional(),
+  fontSize: z.number().min(8).max(256).optional(),
+});
+
+const slideSchema = z.object({
+  background: backgroundSchema.optional(),
+  color: z.string().optional(),
+  slideNumber: slideNumberSchema.optional(),
+});
 
 const stateSchema = z.object({
   metadata: z.object({
@@ -28,16 +46,15 @@ const stateSchema = z.object({
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   }),
-  slides: z.array(
-    z.object({
-      index: z.number().int().nonnegative(),
-    })
-  ),
+  slides: z.array(slideSchema),
 });
 
+type Background = z.infer<typeof backgroundSchema>;
+type SlideNumber = z.infer<typeof slideNumberSchema>;
+type Slide = z.infer<typeof slideSchema>;
 type State = z.infer<typeof stateSchema>;
 
-function initState(params: {
+function createState(params: {
   name: string;
   title?: string;
   subject?: string;
@@ -55,6 +72,30 @@ function initState(params: {
   });
 }
 
+function setUpdatedAt(state: State): State {
+  state.metadata.updatedAt = new Date().toISOString();
+  return state;
+}
+
+function addSlide(state: State, slide: Slide): State {
+  state.slides.push(slide);
+  return setUpdatedAt(state);
+}
+
+/**
+ * State Hydration
+ */
+
+const STATE_DIR = path.join(STORAGE_DIR, ".state");
+
+async function ensureStateDir(): Promise<void> {
+  try {
+    await fs.access(STATE_DIR);
+  } catch {
+    await fs.mkdir(STATE_DIR, { recursive: true });
+  }
+}
+
 function getStateFilePath(name: string): string {
   return path.join(STATE_DIR, `${name}.json`);
 }
@@ -70,20 +111,39 @@ async function writeState(state: State): Promise<void> {
   await fs.writeFile(stateFilePath, JSON.stringify(state, null, 2));
 }
 
-async function ensureStateDir(): Promise<void> {
-  try {
-    await fs.access(STATE_DIR);
-  } catch {
-    await fs.mkdir(STATE_DIR, { recursive: true });
-  }
-}
-
 /**
  * PowerPoint
  */
 
 function getPptxFilePath(name: string): string {
   return path.join(STORAGE_DIR, `${name}.pptx`);
+}
+
+function createPptxFromState(state: State): PptxGenJS {
+  const pptx = new PptxGenJS();
+
+  if (state.metadata.title) {
+    pptx.title = state.metadata.title;
+  }
+  if (state.metadata.subject) {
+    pptx.subject = state.metadata.subject;
+  }
+
+  for (const slide of state.slides) {
+    const pptxSlide = pptx.addSlide();
+
+    if (slide.background) {
+      pptxSlide.background = { ...slide.background };
+    }
+    if (slide.color) {
+      pptxSlide.color = slide.color;
+    }
+    if (slide.slideNumber) {
+      pptxSlide.slideNumber = { ...slide.slideNumber };
+    }
+  }
+
+  return pptx;
 }
 
 /**
@@ -104,7 +164,7 @@ server.tool(
   },
   async ({ name, title, subject }) => {
     try {
-      const state = initState({ name, title, subject });
+      const state = createState({ name, title, subject });
       await writeState(state);
       return {
         content: [
@@ -138,30 +198,15 @@ server.tool(
   async ({ name }) => {
     try {
       const state = await readState(name);
-      const pptx = new PptxGenJS();
-
-      // Set presentation properties
-      if (state.metadata.title) {
-        pptx.title = state.metadata.title;
-      }
-      if (state.metadata.subject) {
-        pptx.subject = state.metadata.subject;
-      }
-
-      // Add slides (currently empty as per schema)
-      for (const slide of state.slides) {
-        pptx.addSlide();
-      }
-
-      // Save PPTX file
-      const pptxPath = getPptxFilePath(name);
-      await pptx.writeFile({ fileName: pptxPath });
+      const pptx = createPptxFromState(state);
+      const pptxFilePath = getPptxFilePath(name);
+      await pptx.writeFile({ fileName: pptxFilePath });
 
       return {
         content: [
           {
             type: "text",
-            text: `Generated PPTX file: ${pptxPath}`,
+            text: `Generated PPTX file: ${pptxFilePath}`,
           },
         ],
       };
@@ -171,6 +216,51 @@ server.tool(
           {
             type: "text",
             text: `Failed to generate PPTX file: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "slide_add",
+  {
+    name: z.string(),
+    background: backgroundSchema.optional(),
+    color: z.string().optional(),
+    slideNumber: slideNumberSchema.optional(),
+  },
+  async ({ name, background, color, slideNumber }) => {
+    try {
+      const state = await readState(name);
+
+      const newSlide = slideSchema.parse({
+        background,
+        color,
+        slideNumber,
+      });
+
+      const slideAddedState = addSlide(state, newSlide);
+      await writeState(slideAddedState);
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Added slide ${state.slides.length} to presentation: ${state.metadata.name}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Failed to add slide: ${
               error instanceof Error ? error.message : String(error)
             }`,
           },
