@@ -5,6 +5,10 @@ import * as path from "path";
 import PptxGenJS from "pptxgenjs";
 import { z } from "zod";
 
+/**
+ * Environment
+ */
+
 const envSchema = z.object({
   STORAGE_DIR: z.string().min(1, "STORAGE_DIR is required"),
 });
@@ -12,9 +16,13 @@ const env = envSchema.parse(process.env);
 const STORAGE_DIR = path.resolve(env.STORAGE_DIR);
 const STATE_DIR = path.join(STORAGE_DIR, ".state");
 
+/**
+ * State
+ */
+
 const stateSchema = z.object({
   metadata: z.object({
-    filename: z.string(),
+    name: z.string(),
     title: z.string().optional(),
     subject: z.string().optional(),
     createdAt: z.string().datetime(),
@@ -30,14 +38,14 @@ const stateSchema = z.object({
 type State = z.infer<typeof stateSchema>;
 
 function initState(params: {
-  filename: string;
+  name: string;
   title?: string;
   subject?: string;
 }): State {
   const now = new Date().toISOString();
   return stateSchema.parse({
     metadata: {
-      filename: params.filename,
+      name: params.name,
       title: params.title,
       subject: params.subject,
       createdAt: now,
@@ -47,18 +55,18 @@ function initState(params: {
   });
 }
 
-function getStateFilePath(filename: string): string {
-  return path.join(STATE_DIR, `${filename}.json`);
+function getStateFilePath(name: string): string {
+  return path.join(STATE_DIR, `${name}.json`);
 }
 
-async function readState(filename: string): Promise<State> {
-  const stateFilePath = getStateFilePath(filename);
+async function readState(name: string): Promise<State> {
+  const stateFilePath = getStateFilePath(name);
   const stateJson = await fs.readFile(stateFilePath, "utf-8");
   return stateSchema.parse(JSON.parse(stateJson));
 }
 
 async function writeState(state: State): Promise<void> {
-  const stateFilePath = getStateFilePath(state.metadata.filename);
+  const stateFilePath = getStateFilePath(state.metadata.name);
   await fs.writeFile(stateFilePath, JSON.stringify(state, null, 2));
 }
 
@@ -68,6 +76,14 @@ async function ensureStateDir(): Promise<void> {
   } catch {
     await fs.mkdir(STATE_DIR, { recursive: true });
   }
+}
+
+/**
+ * PowerPoint
+ */
+
+function getPptxFilePath(name: string): string {
+  return path.join(STORAGE_DIR, `${name}.pptx`);
 }
 
 /**
@@ -82,19 +98,19 @@ const server = new McpServer({
 server.tool(
   "presentation_create",
   {
-    filename: z.string(),
+    name: z.string(),
     title: z.string().optional(),
     subject: z.string().optional(),
   },
-  async ({ filename, title, subject }) => {
+  async ({ name, title, subject }) => {
     try {
-      const state = initState({ filename, title, subject });
+      const state = initState({ name, title, subject });
       await writeState(state);
       return {
         content: [
           {
             type: "text",
-            text: `Created presentation state: ${getStateFilePath(filename)}`,
+            text: `Created presentation state: ${getStateFilePath(name)}`,
           },
         ],
       };
@@ -117,11 +133,11 @@ server.tool(
 server.tool(
   "presentation_flush_pptx",
   {
-    filename: z.string(),
+    name: z.string(),
   },
-  async ({ filename }) => {
+  async ({ name }) => {
     try {
-      const state = await readState(filename);
+      const state = await readState(name);
       const pptx = new PptxGenJS();
 
       // Set presentation properties
@@ -138,7 +154,7 @@ server.tool(
       }
 
       // Save PPTX file
-      const pptxPath = path.join(STORAGE_DIR, filename);
+      const pptxPath = getPptxFilePath(name);
       await pptx.writeFile({ fileName: pptxPath });
 
       return {

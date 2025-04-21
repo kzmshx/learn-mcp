@@ -27,34 +27,26 @@ To add this MCP server to your environment, add the following to your MCP config
 
 #### `presentation_add`
 
+Create a new presentation file
+
 ```ts
-/**
- * Create a new presentation file
- */
 function presentation_create(params: {
-  /**
-   * Name of the presentation file
-   */
-  filename: string;
-  /**
-   * Title text
-   */
+  // Name of the presentation file
+  name: string;
+  // Title text
   title?: string;
-  /**
-   * Subject text
-   */
+  // Subject text
   subject?: string;
 }) => void;
 ```
 
 #### `presentation_flush_pptx`
 
+Flush the presentation file to the storage directory
+
 ```ts
-/**
- * Flush the presentation file to the storage directory
- */
 function presentation_flush_pptx(params: {
-  filename: string;
+  name: string;
 }) => void;
 ```
 
