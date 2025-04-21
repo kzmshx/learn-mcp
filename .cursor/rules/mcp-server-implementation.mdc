@@ -25,14 +25,18 @@ server.tool(
   // Implementation
   async ({ foo, bar }) => {
     // Run something...
+    
+    // If failure
+    if (err) {
+      return {
+        content: [{ type: "text", text: "<error_response>" }],
+        isError: true,
+      }
+    }
+
     // Then return response
     return {
-      content: [
-        {
-          type: "text",
-          text: "<response>",
-        },
-      ],
+      content: [{ type: "text", text: "<success_response>" }],
     };
   }
 );
