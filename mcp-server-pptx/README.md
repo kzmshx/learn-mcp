@@ -13,8 +13,8 @@ To add this MCP server to your environment, add the following to your MCP config
       "autoApprove": [],
       "args": ["/path/to/start.sh"],
       "command": "sh",
-      "config": {
-        "storageDir": "/path/to/pptx/storage"
+      "env": {
+        "STORAGE_DIR": "/path/to/pptx/storage"
       }
     }
   }
@@ -47,11 +47,11 @@ function presentation_create(params: {
 }) => void;
 ```
 
-#### `presentation_get_as_pptx`
+#### `presentation_flush_pptx`
 
 ```ts
 /**
- * Save the presentation fle as a PPTX file
+ * Flush the presentation file to the storage directory
  */
 function presentation_flush_pptx(params: {
   filename: string;
