@@ -310,14 +310,8 @@ async function convertPptxSlideToPng(
   const pdfDir = path.dirname(pdfPath);
   const pngPathTemplate = getPngPathTemplate(name);
 
-  console.error(pptxPath);
-  console.error(pdfPath);
-  console.error(pdfDir);
-  console.error(pngPathTemplate);
-  console.error(slideIndex);
-
   await $`soffice --headless --convert-to pdf --outdir "${pdfDir}" "${pptxPath}"`;
-  await $`convert -density 600 -resize 960x540 "${pdfPath}"[${slideIndex}] "${pngPathTemplate}"`;
+  await $`convert "${pdfPath}"[${slideIndex}] "${pngPathTemplate}"`;
   await fs.unlink(pdfPath);
 }
 
@@ -332,6 +326,7 @@ const server = new McpServer({
 
 server.tool(
   "create_presentation",
+  "Creates a new presentation file. You can specify a title and subject.",
   {
     name: z.string(),
     title: z.string().optional(),
@@ -360,6 +355,7 @@ server.tool(
 
 server.tool(
   "save_as_pptx",
+  "Saves the presentation as a PPTX file.",
   {
     name: z.string(),
   },
@@ -386,6 +382,7 @@ server.tool(
 
 server.tool(
   "add_slide",
+  "Adds a new slide to the presentation. You can customize background color, text content, slide numbers, and more.",
   {
     name: z.string(),
     background: backgroundSchema.optional(),
@@ -396,13 +393,26 @@ server.tool(
   async ({ name, background, color, slideNumber, texts }) => {
     try {
       const state = await readState(name);
-      const newSlide = slideSchema.parse({
+
+      const newSlide = slideSchema.safeParse({
         background,
         color,
         slideNumber,
         texts,
       });
-      const modifiedState = addSlide(state, newSlide);
+      if (!newSlide.success) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to add slide: ${newSlide.error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const modifiedState = addSlide(state, newSlide.data);
       await writeState(modifiedState);
 
       return {
@@ -426,6 +436,7 @@ server.tool(
 
 server.tool(
   "replace_slide",
+  "Replaces the slide at the specified index with new content.",
   {
     name: z.string(),
     slideIndex: z.number().int().min(0),
@@ -437,13 +448,26 @@ server.tool(
   async ({ name, slideIndex, background, color, slideNumber, texts }) => {
     try {
       const state = await readState(name);
-      const newSlide = slideSchema.parse({
+
+      const newSlide = slideSchema.safeParse({
         background,
         color,
         slideNumber,
         texts,
       });
-      const modifiedState = replaceSlide(state, slideIndex, newSlide);
+      if (!newSlide.success) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to replace slide: ${newSlide.error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      const modifiedState = replaceSlide(state, slideIndex, newSlide.data);
       await writeState(modifiedState);
 
       return {
@@ -469,6 +493,7 @@ server.tool(
 
 server.tool(
   "get_slide_as_png",
+  "Exports the specified slide as a PNG image.",
   {
     name: z.string(),
     slideIndex: z.number().int().min(0),
@@ -498,6 +523,52 @@ server.tool(
       };
     }
   }
+);
+
+server.prompt(
+  "create-slide",
+  "Generates a presentation slide following coordinate system and design guidelines for optimal layout.",
+  async () => ({
+    messages: [
+      {
+        role: "assistant",
+        content: {
+          type: "text",
+          text: `Follow these guidelines when generating presentation slides:
+
+1. Basic Slide Dimensions
+- Default layout: 10 × 5.625 inches (16:9 ratio)
+- Coordinate system: Origin (0,0) at top-left, specified in inches (number) or percentages (string)
+
+2. Margins and Safe Areas
+- Vertical margins: minimum 0.5 inches
+- Horizontal margins: minimum 0.75 inches
+- Usable content area: 8.5 inches × 4.625 inches
+- Bottom safe area: avoid placing content within 0.75 inches (≈13%) from bottom
+
+3. Basic Layout (Inch Specification)
+- Title position: y=0.5 to 1.5
+- Subtitle position: y=1.75 to 2.25
+- Main content start: y=2.5
+- Content lower limit: y=4.875 (0.75 inches from bottom)
+- Standard textbox width: w=8.5 (0.75 inches margins)
+
+5. Layout Principles
+- Slide numbers: Always enable slide numbers
+- Item spacing: minimum 0.5 inches (≈9%)
+- Font sizes scaled to inch measurements (title: 40-48pt, body: 24-28pt)
+`,
+        },
+      },
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: `Create a presentation slide with the provided content.`,
+        },
+      },
+    ],
+  })
 );
 
 await ensureStateDir();
