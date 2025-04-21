@@ -36,7 +36,7 @@ server.tool(
 );
 
 server.tool(
-  "presentation_get_as_pptx",
+  "presentation_flush_pptx",
   {
     filename: z.string(),
   },
