@@ -41,6 +41,23 @@ server.tool(
   }
 );
 
+// Define prompt
+server.prompt(
+  "review-code",
+  {
+    code: z.string()
+  },
+  ({ code }) => ({
+    messages: [{
+      role: "user",
+      content: {
+        type: "text",
+        text: `Please review this code:\n\n${code}`
+      }
+    }]
+  })
+);
+
 // Define transport
 const transport = new StdioServerTransport();
 await server.connect(transport);
