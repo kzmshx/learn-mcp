@@ -1,0 +1,7 @@
+---
+description: 依存パッケージを追加・削除するときの注意点
+globs: 
+alwaysApply: false
+---
+- Add or remove dependencies via `bun install`
+- Follow [bunfig.toml](mdc:bunfig.toml) for managing dependencies
