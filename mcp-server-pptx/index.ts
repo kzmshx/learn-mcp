@@ -96,26 +96,27 @@ async function ensureStateDir(): Promise<void> {
   }
 }
 
-function getStateFilePath(name: string): string {
+function getStatePath(name: string): string {
   return path.join(STATE_DIR, `${name}.json`);
 }
 
 async function readState(name: string): Promise<State> {
-  const stateFilePath = getStateFilePath(name);
-  const stateJson = await fs.readFile(stateFilePath, "utf-8");
+  const statePath = getStatePath(name);
+  const stateJson = await fs.readFile(statePath, "utf-8");
   return stateSchema.parse(JSON.parse(stateJson));
 }
 
-async function writeState(state: State): Promise<void> {
-  const stateFilePath = getStateFilePath(state.metadata.name);
-  await fs.writeFile(stateFilePath, JSON.stringify(state, null, 2));
+async function writeState(state: State): Promise<string> {
+  const statePath = getStatePath(state.metadata.name);
+  await fs.writeFile(statePath, JSON.stringify(state, null, 2));
+  return statePath;
 }
 
 /**
  * PowerPoint
  */
 
-function getPptxFilePath(name: string): string {
+function getPptxPath(name: string): string {
   return path.join(STORAGE_DIR, `${name}.pptx`);
 }
 
@@ -156,7 +157,7 @@ const server = new McpServer({
 });
 
 server.tool(
-  "presentation_create",
+  "create_presentation",
   {
     name: z.string(),
     title: z.string().optional(),
@@ -165,24 +166,17 @@ server.tool(
   async ({ name, title, subject }) => {
     try {
       const state = createState({ name, title, subject });
-      await writeState(state);
+      const statePath = await writeState(state);
+
       return {
-        content: [
-          {
-            type: "text",
-            text: `Created presentation state: ${getStateFilePath(name)}`,
-          },
-        ],
+        content: [{ type: "text", text: `Created presentation: ${statePath}` }],
       };
-    } catch (error) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
       return {
         content: [
-          {
-            type: "text",
-            text: `Failed to create presentation: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
+          { type: "text", text: `Failed to create presentation: ${message}` },
         ],
         isError: true,
       };
@@ -191,7 +185,7 @@ server.tool(
 );
 
 server.tool(
-  "presentation_flush_pptx",
+  "save_as_pptx",
   {
     name: z.string(),
   },
@@ -199,26 +193,18 @@ server.tool(
     try {
       const state = await readState(name);
       const pptx = createPptxFromState(state);
-      const pptxFilePath = getPptxFilePath(name);
+      const pptxFilePath = getPptxPath(name);
       await pptx.writeFile({ fileName: pptxFilePath });
 
       return {
-        content: [
-          {
-            type: "text",
-            text: `Generated PPTX file: ${pptxFilePath}`,
-          },
-        ],
+        content: [{ type: "text", text: `Saved PPTX file: ${pptxFilePath}` }],
       };
-    } catch (error) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
       return {
         content: [
-          {
-            type: "text",
-            text: `Failed to generate PPTX file: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
+          { type: "text", text: `Failed to save PPTX file: ${message}` },
         ],
         isError: true,
       };
@@ -227,7 +213,7 @@ server.tool(
 );
 
 server.tool(
-  "slide_add",
+  "add_slide",
   {
     name: z.string(),
     background: backgroundSchema.optional(),
@@ -237,15 +223,13 @@ server.tool(
   async ({ name, background, color, slideNumber }) => {
     try {
       const state = await readState(name);
-
       const newSlide = slideSchema.parse({
         background,
         color,
         slideNumber,
       });
-
-      const slideAddedState = addSlide(state, newSlide);
-      await writeState(slideAddedState);
+      const modifiedState = addSlide(state, newSlide);
+      await writeState(modifiedState);
 
       return {
         content: [
@@ -255,16 +239,11 @@ server.tool(
           },
         ],
       };
-    } catch (error) {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
       return {
-        content: [
-          {
-            type: "text",
-            text: `Failed to add slide: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          },
-        ],
+        content: [{ type: "text", text: `Failed to add slide: ${message}` }],
         isError: true,
       };
     }

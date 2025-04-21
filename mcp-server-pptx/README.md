@@ -25,12 +25,12 @@ To add this MCP server to your environment, add the following to your MCP config
 
 ### Tools
 
-#### `presentation_add`
+#### `create_presentation`
 
 Create a new presentation file
 
 ```ts
-function presentation_create(params: {
+function create_presentation(params: {
   // Name of the presentation file
   name: string;
   // Title text
@@ -40,22 +40,23 @@ function presentation_create(params: {
 }) => void;
 ```
 
-#### `presentation_flush_pptx`
+#### `save_as_pptx`
 
-Flush the presentation file to the storage directory
+Save the presentation as a PPTX file
 
 ```ts
-function presentation_flush_pptx(params: {
+function save_as_pptx(params: {
+  // Name of the presentation file
   name: string;
 }) => void;
 ```
 
-#### `slide_add`
+#### `add_slide`
 
 Add a new slide to the presentation
 
 ```ts
-function slide_add(params: {
+function add_slide(params: {
   // Name of the presentation file
   name: string;
   // Background properties for the slide
