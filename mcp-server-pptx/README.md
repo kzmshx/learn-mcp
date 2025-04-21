@@ -2,6 +2,15 @@
 
 MCP server for generating and managing PowerPoint presentations using PptxGenJS.
 
+## Prerequisites
+
+- [LibreOffice](https://ja.libreoffice.org/)
+  - `brew install --cask libreoffice`
+- [ImageMagick](https://imagemagick.org/)
+  - `brew install imagemagick`
+- [Ghostscript](https://www.ghostscript.com/)
+  - `brew install ghostscript`
+
 ## Installation
 
 To add this MCP server to your environment, add the following to your MCP config file:
@@ -27,93 +36,123 @@ To add this MCP server to your environment, add the following to your MCP config
 
 #### `create_presentation`
 
-Create a new presentation file
+Create a new presentation file.
 
 ```ts
 function create_presentation(params: {
-  // Name of the presentation file
-  name: string;
-  // Title text
-  title?: string;
-  // Subject text
-  subject?: string;
+  name: string; // Name of the presentation file
+  title?: string; // Title text
+  subject?: string; // Subject text
 }) => void;
 ```
 
 #### `save_as_pptx`
 
-Save the presentation as a PPTX file
+Save the presentation as a PPTX file.
 
 ```ts
 function save_as_pptx(params: {
-  // Name of the presentation file
-  name: string;
+  name: string; // Name of the presentation file
 }) => void;
 ```
 
 #### `add_slide`
 
-Add a new slide to the presentation
+Add a new slide to the presentation.
 
 ```ts
 function add_slide(params: {
-  // Name of the presentation file
-  name: string;
-  // Background properties for the slide
-  background?: Background;
-  // Default text color for the slide in hex format
-  color?: string;
-  // Slide number properties
-  slideNumber?: SlideNumber;
+  name: string; // Name of the presentation file
+  background?: Background;  // Background properties for the slide
+  color?: string; // Default text color for the slide in hex format
+  slideNumber?: SlideNumber; // Slide number properties
+  texts?: SlideText[]; // Array of text elements to add to the slide
 }) => void;
+```
+
+#### `replace_slide`
+
+Replace a slide in the presentation.
+
+```ts
+function replace_slide(params: {
+  name: string; // Name of the presentation file
+  background?: Background; // Background properties for the slide
+  color?: string; // Default text color for the slide in hex format
+  slideNumber?: SlideNumber; // Slide number properties
+  texts?: SlideText[]; // Array of text elements to add to the slide
+}) => void;
+```
+
+#### `get_slide_as_png`
+
+Get a slide as a PNG image.
+
+```ts
+function get_slide_as_png(params: {
+  name: string; // Name of the presentation file
+  slideIndex: number; // Index of the slide to get
+}) => string;
 ```
 
 #### Shared Types
 
 ```ts
 type Background = {
-  // Background color in hex format (e.g., "F1F1F1")
-  color?: string;
-  // Background transparency (0-100)
-  transparency?: number;
+  color?: string; // Background color in hex format (e.g., "F1F1F1")
+  transparency?: number; // Background transparency (0-100)
 };
 
 type SlideNumber = {
-  // Horizontal position in inches (number) or percentage (string)
-  // @example 1.0 or "50%"
-  x: number | string;
-  // Vertical position in inches (number) or percentage (string)
-  // @example 1.0 or "90%"
-  y: number | string;
-  // Color in hex format (default: "000000")
-  color?: string;
-  // Font face (e.g., "Arial")
-  fontFace?: string;
-  // Font size (8-256)
-  fontSize?: number;
+  x: number | string; // Horizontal position in inches (number) or percentage (string) (e.g., 1.0 or "50%")
+  y: number | string; // Vertical position in inches (number) or percentage (string) (e.g., 1.0 or "90%")
+  color?: string; // Color in hex format (default: "000000")
+  fontFace?: string; // Font face (e.g., "Arial")
+  fontSize?: number; // Font size (8-256)
 };
+
+type TextContent = {
+  text: string; // Text content
+  options?: TextOptions; // Text formatting options
+};
+
+type TextOptions = {
+  // Position and size
+  x?: number | string; // inches or percentage (e.g., 1.0 or "50%")
+  y?: number | string; // inches or percentage (e.g., 1.0 or "50%")
+  w?: number | string; // inches or percentage (e.g., 2.0 or "30%")
+  h?: number | string; // inches or percentage (e.g., 1.0 or "10%")
+
+  // Text formatting
+  color?: string; // hex color code (e.g., "0088CC")
+  fontFace?: string; // font name (e.g., "Arial")
+  fontSize?: number; // font size (8-256)
+  bold?: boolean; // bold text
+  italic?: boolean; // italic text
+  underline?: boolean; // underlined text
+  align?: "left" | "center" | "right"; // horizontal alignment
+  valign?: "top" | "middle" | "bottom"; // vertical alignment
+
+  // Advanced settings
+  bullet?:
+    | boolean
+    | {
+        // bullet point settings
+        type?: "number" | string;
+        code?: string;
+        style?: string;
+      };
+  fill?: {
+    // background color settings
+    color: string;
+  };
+  hyperlink?: {
+    // hyperlink settings
+    url?: string;
+    slide?: string;
+    tooltip?: string;
+  };
+};
+
+type SlideText = TextContent | TextContent[];
 ```
-
-<!--
-
-## Future
-
-### Tools
-
-#### `presentation_delete`
-
-#### `presentation_get_as_png`
-
-#### `slide_add`
-
-#### `slide_delete`
-
-#### `slide_get_as_png`
-
-#### `slide_get_as_pptx`
-
-#### `slide_update_master`
-
-#### `slide_update`
-
--->
