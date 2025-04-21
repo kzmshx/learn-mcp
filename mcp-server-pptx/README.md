@@ -50,33 +50,50 @@ function presentation_flush_pptx(params: {
 }) => void;
 ```
 
+#### `slide_add`
+
+Add a new slide to the presentation
+
+```ts
+function slide_add(params: {
+  // Name of the presentation file
+  name: string;
+  // Background properties for the slide
+  background?: {
+    // Background color in hex format (e.g., "F1F1F1")
+    color?: string;
+    // Background transparency (0-100)
+    transparency?: number;
+  };
+  // Default text color for the slide in hex format
+  color?: string;
+  // Slide number properties
+  slideNumber?: {
+    // Horizontal position in inches (number) or percentage (string)
+    // @example 1.0 or "50%"
+    x: number | string;
+    // Vertical position in inches (number) or percentage (string)
+    // @example 1.0 or "90%"
+    y: number | string;
+    // Color in hex format (default: "000000")
+    color?: string;
+    // Font face (e.g., "Arial")
+    fontFace?: string;
+    // Font size (8-256)
+    fontSize?: number;
+  };
+}) => void;
+```
+
 <!--
 
 ## Future
 
-### Resources
-
-#### `pptx://schema`
-
-JSON schema for the presentation state.
-
-#### `state:///<filename>`
-
-Current state of the presentation.
-
-#### `state:///<filename>/<slide_index>`
-
-Current state of the slide at the given index.
-
 ### Tools
-
-#### `presentation_add`
 
 #### `presentation_delete`
 
 #### `presentation_get_as_png`
-
-#### `presentation_get_as_pptx`
 
 #### `slide_add`
 
