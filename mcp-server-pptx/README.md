@@ -36,7 +36,7 @@ To add this MCP server to your environment, add the following to your MCP config
 
 #### `guide_slide_creation`
 
-Get guidelines for creating a presentation slide.
+Provides guidelines for creating presentation slides.
 
 #### `create_presentation`
 
