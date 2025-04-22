@@ -84,6 +84,17 @@ function replace_slide(params: {
 }) => void;
 ```
 
+#### `get_slide_state`
+
+Get the state of a slide in the presentation.
+
+```ts
+function get_slide_state(params: {
+  name: string; // Name of the presentation file
+  slideIndex: number; // Index of the slide to get
+}) => SlideState;
+```
+
 #### `get_slide_as_png`
 
 Get a slide as a PNG image.
