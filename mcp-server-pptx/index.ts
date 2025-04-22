@@ -337,8 +337,12 @@ async function writePptxSlideToPng(
 }
 
 /**
- * Response utilities
+ * Utilities
  */
+
+function description(lines: string[]): string {
+  return lines.join("\n");
+}
 
 function okText(text: string): CallToolResult {
   return { content: [{ type: "text", text }] };
@@ -359,7 +363,10 @@ const server = new McpServer({
 
 server.tool(
   "guide_slide_creation",
-  "Get guidelines for creating a presentation slide.",
+  description([
+    "Provides guidelines for creating presentation slides.",
+    "You must reference this tool when adding or replacing slides.",
+  ]),
   async () =>
     okText(`Follow these guidelines when generating presentation slides:
 
@@ -389,7 +396,11 @@ server.tool(
 
 server.tool(
   "create_presentation",
-  "Creates a new presentation file. You can specify a `title` and `subject`. `name` must consist of alphanumeric characters, underscores, or hyphens.",
+  description([
+    "Creates a new presentation file.",
+    "You can specify a `title` and `subject`.",
+    "`name` must consist of alphanumeric characters, underscores, or hyphens.",
+  ]),
   {
     name: z.string(),
     title: z.string().optional(),
@@ -409,7 +420,10 @@ server.tool(
 
 server.tool(
   "add_slide",
-  "Adds a new slide to the presentation. Use the `slide_guidelines` tool to get started.",
+  description([
+    "Adds a new slide to the presentation.",
+    "You must reference the `slide_guidelines` tool when adding a slide.",
+  ]),
   {
     name: z.string(),
     background: backgroundSchema.optional(),
@@ -511,7 +525,10 @@ server.tool(
 
 server.tool(
   "replace_slide",
-  "Replaces the slide at the specified index with new content. Use the `slide_guidelines` tool to get started.",
+  description([
+    "Replaces the slide at the specified index with new content.",
+    "You must reference the `slide_guidelines` tool when replacing a slide.",
+  ]),
   {
     name: z.string(),
     slideIndex: z.number().int().min(0),
@@ -547,7 +564,10 @@ server.tool(
 
 server.tool(
   "export_presentation_as_pptx",
-  "Exports the presentation as a PPTX file. `outDir` must be an absolute path.",
+  description([
+    "Exports the presentation as a PPTX file.",
+    "`outDir` must be an absolute path.",
+  ]),
   {
     name: z.string(),
     outDir: z.string(),
@@ -566,7 +586,10 @@ server.tool(
 
 server.tool(
   "export_slide_as_png",
-  "Exports the specified slide as a PNG image. `outDir` must be an absolute path.",
+  description([
+    "Exports the specified slide as a PNG image.",
+    "`outDir` must be an absolute path.",
+  ]),
   {
     name: z.string(),
     slideIndex: z.number().int().min(0),
@@ -590,7 +613,10 @@ server.tool(
 
 server.tool(
   "export_slides_as_png",
-  "Exports all slides as PNG images. `outDir` must be an absolute path.",
+  description([
+    "Exports all slides as PNG images.",
+    "`outDir` must be an absolute path.",
+  ]),
   {
     name: z.string(),
     outDir: z.string(),
