@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { $ } from "bun";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -142,16 +143,14 @@ const textContentSchema = z.object({
 });
 type TextContent = z.infer<typeof textContentSchema>;
 
-const slideTextSchema = z.array(
-  z.union([textContentSchema, z.array(textContentSchema)])
-);
-type SlideText = z.infer<typeof slideTextSchema>;
+const slideTextsSchema = z.array(textContentSchema);
+type SlideTexts = z.infer<typeof slideTextsSchema>;
 
 const slideSchema = z.object({
   background: backgroundSchema.optional(),
   color: z.string().optional(),
   slideNumber: slideNumberSchema.optional(),
-  texts: slideTextSchema.optional(),
+  texts: slideTextsSchema.optional(),
 });
 type Slide = z.infer<typeof slideSchema>;
 
@@ -310,9 +309,21 @@ async function convertPptxSlideToPng(
   const pdfDir = path.dirname(pdfPath);
   const pngPathTemplate = getPngPathTemplate(name);
 
-  await $`soffice --headless --convert-to pdf --outdir "${pdfDir}" "${pptxPath}"`;
-  await $`convert "${pdfPath}"[${slideIndex}] "${pngPathTemplate}"`;
+  await $`soffice --headless --convert-to pdf --outdir ${pdfDir} ${pptxPath}`;
+  await $`magick ${pdfPath}[${slideIndex}] ${pngPathTemplate}`;
   await fs.unlink(pdfPath);
+}
+
+/**
+ * Response utilities
+ */
+
+function okText(text: string): CallToolResult {
+  return { content: [{ type: "text", text }] };
+}
+
+function errText(text: string): CallToolResult {
+  return { content: [{ type: "text", text }], isError: true };
 }
 
 /**
@@ -336,19 +347,10 @@ server.tool(
     try {
       const state = createState({ name, title, subject });
       const statePath = await writeState(state);
-
-      return {
-        content: [{ type: "text", text: `Created presentation: ${statePath}` }],
-      };
+      return okText(`Created presentation: ${statePath}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-
-      return {
-        content: [
-          { type: "text", text: `Failed to create presentation: ${message}` },
-        ],
-        isError: true,
-      };
+      return errText(`Failed to create presentation: ${message}`);
     }
   }
 );
@@ -363,32 +365,23 @@ server.tool(
     try {
       const state = await readState(name);
       const pptxFilePath = await writePptxFromState(state);
-
-      return {
-        content: [{ type: "text", text: `Saved PPTX file: ${pptxFilePath}` }],
-      };
+      return okText(`Saved PPTX file: ${pptxFilePath}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-
-      return {
-        content: [
-          { type: "text", text: `Failed to save PPTX file: ${message}` },
-        ],
-        isError: true,
-      };
+      return errText(`Failed to save PPTX file: ${message}`);
     }
   }
 );
 
 server.tool(
   "add_slide",
-  "Adds a new slide to the presentation. You can customize background color, text content, slide numbers, and more.",
+  "Adds a new slide to the presentation. You can customize background color, text content, slide numbers, and more. Use the help_create_slide tool to get started.",
   {
     name: z.string(),
     background: backgroundSchema.optional(),
     color: z.string().optional(),
     slideNumber: slideNumberSchema.optional(),
-    texts: slideTextSchema.optional(),
+    texts: slideTextsSchema.optional(),
   },
   async ({ name, background, color, slideNumber, texts }) => {
     try {
@@ -401,49 +394,32 @@ server.tool(
         texts,
       });
       if (!newSlide.success) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to add slide: ${newSlide.error.message}`,
-            },
-          ],
-          isError: true,
-        };
+        return errText(`Failed to add slide: ${newSlide.error.message}`);
       }
 
       const modifiedState = addSlide(state, newSlide.data);
       await writeState(modifiedState);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Added slide ${state.slides.length} to presentation: ${state.metadata.name}`,
-          },
-        ],
-      };
+      return okText(
+        `Added slide ${state.slides.length} to presentation: ${state.metadata.name}`
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-
-      return {
-        content: [{ type: "text", text: `Failed to add slide: ${message}` }],
-        isError: true,
-      };
+      return errText(`Failed to add slide: ${message}`);
     }
   }
 );
 
 server.tool(
   "replace_slide",
-  "Replaces the slide at the specified index with new content.",
+  "Replaces the slide at the specified index with new content. Use the help_create_slide tool to get started.",
   {
     name: z.string(),
     slideIndex: z.number().int().min(0),
     background: backgroundSchema.optional(),
     color: z.string().optional(),
     slideNumber: slideNumberSchema.optional(),
-    texts: slideTextSchema.optional(),
+    texts: slideTextsSchema.optional(),
   },
   async ({ name, slideIndex, background, color, slideNumber, texts }) => {
     try {
@@ -456,37 +432,18 @@ server.tool(
         texts,
       });
       if (!newSlide.success) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to replace slide: ${newSlide.error.message}`,
-            },
-          ],
-          isError: true,
-        };
+        return errText(`Failed to replace slide: ${newSlide.error.message}`);
       }
 
       const modifiedState = replaceSlide(state, slideIndex, newSlide.data);
       await writeState(modifiedState);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Replaced slide ${slideIndex} in presentation: ${state.metadata.name}`,
-          },
-        ],
-      };
+      return okText(
+        `Replaced slide ${slideIndex} in presentation: ${state.metadata.name}`
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-
-      return {
-        content: [
-          { type: "text", text: `Failed to replace slide: ${message}` },
-        ],
-        isError: true,
-      };
+      return errText(`Failed to replace slide: ${message}`);
     }
   }
 );
@@ -502,48 +459,35 @@ server.tool(
     try {
       const state = await readState(name);
       if (slideIndex < 0 || slideIndex >= state.slides.length) {
-        throw new Error(`Invalid slide index: ${slideIndex}`);
+        return errText(`Invalid slide index: ${slideIndex}`);
       }
 
       await writePptxFromState(state);
       await convertPptxSlideToPng(name, slideIndex);
       const pngPath = getPngPath(name, slideIndex);
 
-      return {
-        content: [{ type: "text", text: `PNG file is saved at: ${pngPath}` }],
-      };
+      return okText(`PNG file is saved at: ${pngPath}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-
-      return {
-        content: [
-          { type: "text", text: `Failed to get slide as PNG: ${message}` },
-        ],
-        isError: true,
-      };
+      return errText(`Failed to get slide as PNG: ${message}`);
     }
   }
 );
 
-server.prompt(
-  "create-slide",
-  "Generates a presentation slide following coordinate system and design guidelines for optimal layout.",
-  async () => ({
-    messages: [
-      {
-        role: "assistant",
-        content: {
-          type: "text",
-          text: `Follow these guidelines when generating presentation slides:
+server.tool(
+  "help_create_slide",
+  "Get help for creating a presentation slide.",
+  async () =>
+    okText(`Follow these guidelines when generating presentation slides:
 
 1. Basic Slide Dimensions
-- Default layout: 10 × 5.625 inches (16:9 ratio)
+- Default layout: 10 x 5.625 inches (16:9 ratio)
 - Coordinate system: Origin (0,0) at top-left, specified in inches (number) or percentages (string)
 
 2. Margins and Safe Areas
 - Vertical margins: minimum 0.5 inches
 - Horizontal margins: minimum 0.75 inches
-- Usable content area: 8.5 inches × 4.625 inches
+- Usable content area: 8.5 x 4.625 inches
 - Bottom safe area: avoid placing content within 0.75 inches (≈13%) from bottom
 
 3. Basic Layout (Inch Specification)
@@ -557,18 +501,7 @@ server.prompt(
 - Slide numbers: Always enable slide numbers
 - Item spacing: minimum 0.5 inches (≈9%)
 - Font sizes scaled to inch measurements (title: 40-48pt, body: 24-28pt)
-`,
-        },
-      },
-      {
-        role: "user",
-        content: {
-          type: "text",
-          text: `Create a presentation slide with the provided content.`,
-        },
-      },
-    ],
-  })
+`)
 );
 
 await ensureStateDir();
