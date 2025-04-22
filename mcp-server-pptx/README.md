@@ -34,77 +34,107 @@ To add this MCP server to your environment, add the following to your MCP config
 
 ### Tools
 
+#### `guide_slide_creation`
+
+Get guidelines for creating a presentation slide.
+
 #### `create_presentation`
 
 Create a new presentation file.
 
-```ts
-function create_presentation(params: {
-  name: string; // Name of the presentation file
-  title?: string; // Title text
-  subject?: string; // Subject text
-}) => void;
-```
-
-#### `save_as_pptx`
-
-Save the presentation as a PPTX file.
-
-```ts
-function save_as_pptx(params: {
-  name: string; // Name of the presentation file
-}) => void;
-```
+- Parameters
+  - `name` (string): Name of the presentation
+  - `title` (string | undefined): Title text
+  - `subject` (string | undefined): Subject text
+- Returns
+  - Created presentation file path
 
 #### `add_slide`
 
 Add a new slide to the presentation.
 
-```ts
-function add_slide(params: {
-  name: string; // Name of the presentation file
-  background?: Background;  // Background properties for the slide
-  color?: string; // Default text color for the slide in hex format
-  slideNumber?: SlideNumber; // Slide number properties
-  texts?: SlideText[]; // Array of text elements to add to the slide
-}) => void;
-```
+- Parameters
+  - `name` (string): Name of the presentation
+  - `background` (Background | undefined): Background properties for the slide
+  - `color` (string | undefined): Default text color for the slide in hex format
+  - `slideNumber` (SlideNumber | undefined): Slide number properties
+  - `texts` (SlideText[] | undefined): Array of text elements to add to the slide
+- Returns
+  - Added slide index
+
+#### `get_slide`
+
+Gets the state of the specified slide.
+
+- Parameters
+  - `name` (string): Name of the presentation
+  - `slideIndex` (number): Index of the slide to get
+- Returns
+  - State of the specified slide
+
+#### `get_slides`
+
+Gets the state of all slides.
+
+- Parameters
+  - `name` (string): Name of the presentation
+- Returns
+  - State of all slides
+
+#### `remove_slide`
+
+Removes the slide at the specified index.
+
+- Parameters
+  - `name` (string): Name of the presentation
+  - `slideIndex` (number): Index of the slide to remove
+- Returns
+  - Removed slide index
 
 #### `replace_slide`
 
 Replace a slide in the presentation.
 
-```ts
-function replace_slide(params: {
-  name: string; // Name of the presentation file
-  background?: Background; // Background properties for the slide
-  color?: string; // Default text color for the slide in hex format
-  slideNumber?: SlideNumber; // Slide number properties
-  texts?: SlideText[]; // Array of text elements to add to the slide
-}) => void;
-```
+- Parameters
+  - `name` (string): Name of the presentation
+  - `slideIndex` (number): Index of the slide to replace
+  - `background` (Background | undefined): Background properties for the slide
+  - `color` (string | undefined): Default text color for the slide in hex format
+  - `slideNumber` (SlideNumber | undefined): Slide number properties
+  - `texts` (SlideText[] | undefined): Array of text elements to add to the slide
+- Returns
+  - Replaced slide index
 
-#### `get_slide_state`
+#### `export_presentation_as_pptx`
 
-Get the state of a slide in the presentation.
+Exports the presentation as a PPTX file.
 
-```ts
-function get_slide_state(params: {
-  name: string; // Name of the presentation file
-  slideIndex: number; // Index of the slide to get
-}) => SlideState;
-```
+- Parameters
+  - `name`: Name of the presentation
+  - `outDir`: Directory to save the PPTX file
+- Returns
+  - Exported PPTX file path
 
-#### `get_slide_as_png`
+#### `export_slide_as_png`
 
-Get a slide as a PNG image.
+Exports the specified slide as a PNG image.
 
-```ts
-function get_slide_as_png(params: {
-  name: string; // Name of the presentation file
-  slideIndex: number; // Index of the slide to get
-}) => string;
-```
+- Parameters
+  - `name`: Name of the presentation
+  - `slideIndex`: Index of the slide to export
+  - `outDir`: Directory to save the PNG file
+- Returns
+  - Exported PNG file path
+
+#### `export_slides_as_png`
+
+Exports all slides as PNG images.
+
+- Parameters
+  - `name`: Name of the presentation
+  - `outDir`: Directory to save the PNG files
+- Returns
+  - Exported PNG file paths
 
 #### Shared Types
 
