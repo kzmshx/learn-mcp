@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { $ } from "bun";
+import { $, Glob } from "bun";
 import * as fs from "fs/promises";
 import * as path from "path";
 import PptxGenJS from "pptxgenjs";
@@ -18,25 +18,25 @@ const env = envSchema.parse(process.env);
 const STORAGE_DIR = path.resolve(env.STORAGE_DIR);
 
 /**
- * State
+ * State Schema
  */
+
+const fontSizeSchema = z.number().min(8).max(256);
 
 const backgroundSchema = z.object({
   color: z.string().optional(),
   transparency: z.number().min(0).max(100).optional(),
 });
-type Background = z.infer<typeof backgroundSchema>;
 
 const slideNumberSchema = z.object({
   x: z.number(),
   y: z.number(),
   color: z.string().optional(),
   fontFace: z.string().optional(),
-  fontSize: z.number().min(8).max(256).optional(),
+  fontSize: fontSizeSchema.optional(),
 });
-type SlideNumber = z.infer<typeof slideNumberSchema>;
 
-const textOptionUnderlineStyleSchema = z.enum([
+const textUnderlineStyleSchema = z.enum([
   "dash",
   "dashHeavy",
   "dashLong",
@@ -55,18 +55,19 @@ const textOptionUnderlineStyleSchema = z.enum([
   "wavyDbl",
   "wavyHeavy",
 ]);
-type TextOptionUnderlineStyle = z.infer<typeof textOptionUnderlineStyleSchema>;
 
-const textOptionUnderlineSchema = z.object({
-  style: textOptionUnderlineStyleSchema.optional(),
+const textUnderlineSchema = z.object({
+  style: textUnderlineStyleSchema.optional(),
   color: z.string().optional(),
 });
-type TextOptionUnderline = z.infer<typeof textOptionUnderlineSchema>;
 
-const textOptionBulletTypeSchema = z.enum(["number", "bullet"]);
-type TextOptionBulletType = z.infer<typeof textOptionBulletTypeSchema>;
+const textAlignSchema = z.enum(["left", "center", "right"]);
 
-const textOptionBulletNumberTypeSchema = z.enum([
+const textValignSchema = z.enum(["top", "middle", "bottom"]);
+
+const textBulletTypeSchema = z.enum(["number", "bullet"]);
+
+const textBulletNumberTypeSchema = z.enum([
   "alphaLcParenBoth",
   "alphaLcParenR",
   "alphaLcPeriod",
@@ -84,24 +85,26 @@ const textOptionBulletNumberTypeSchema = z.enum([
   "romanUcParenR",
   "romanUcPeriod",
 ]);
-type TextOptionBulletNumberType = z.infer<
-  typeof textOptionBulletNumberTypeSchema
->;
 
-const textOptionBulletDetailSchema = z.object({
-  type: textOptionBulletTypeSchema.optional(),
+const textBulletDetailSchema = z.object({
+  type: textBulletTypeSchema.optional(),
   characterCode: z.string().optional(),
   indent: z.number().optional(),
-  numberType: textOptionBulletNumberTypeSchema.optional(),
+  numberType: textBulletNumberTypeSchema.optional(),
   style: z.string().optional(),
 });
-type TextOptionBulletDetail = z.infer<typeof textOptionBulletDetailSchema>;
 
-const textOptionBulletSchema = z.union([
-  z.boolean(),
-  textOptionBulletDetailSchema,
-]);
-type TextOptionBullet = z.infer<typeof textOptionBulletSchema>;
+const textBulletSchema = z.union([z.boolean(), textBulletDetailSchema]);
+
+const textFillSchema = z.object({
+  color: z.string(),
+});
+
+const textHyperlinkSchema = z.object({
+  url: z.string(),
+  slide: z.number().optional(),
+  tooltip: z.string().optional(),
+});
 
 const textOptionsSchema = z.object({
   // Position and size
@@ -109,42 +112,27 @@ const textOptionsSchema = z.object({
   y: z.number().optional(),
   w: z.number().optional(),
   h: z.number().optional(),
-
   // Text formatting
   color: z.string().optional(),
   fontFace: z.string().optional(),
-  fontSize: z.number().min(8).max(256).optional(),
+  fontSize: fontSizeSchema.optional(),
   bold: z.boolean().optional(),
   italic: z.boolean().optional(),
-  underline: textOptionUnderlineSchema.optional(),
-  align: z.enum(["left", "center", "right"]).optional(),
-  valign: z.enum(["top", "middle", "bottom"]).optional(),
-
+  underline: textUnderlineSchema.optional(),
+  align: textAlignSchema.optional(),
+  valign: textValignSchema.optional(),
   // Advanced settings
-  bullet: textOptionBulletSchema.optional(),
-  fill: z
-    .object({
-      color: z.string(),
-    })
-    .optional(),
-  hyperlink: z
-    .object({
-      url: z.string().optional(),
-      slide: z.number().optional(),
-      tooltip: z.string().optional(),
-    })
-    .optional(),
+  bullet: textBulletSchema.optional(),
+  fill: textFillSchema.optional(),
+  hyperlink: textHyperlinkSchema.optional(),
 });
-type TextOptions = z.infer<typeof textOptionsSchema>;
 
 const textContentSchema = z.object({
   text: z.string(),
   options: textOptionsSchema.optional(),
 });
-type TextContent = z.infer<typeof textContentSchema>;
 
 const slideTextsSchema = z.array(textContentSchema);
-type SlideTexts = z.infer<typeof slideTextsSchema>;
 
 const slideSchema = z.object({
   background: backgroundSchema.optional(),
@@ -152,7 +140,6 @@ const slideSchema = z.object({
   slideNumber: slideNumberSchema.optional(),
   texts: slideTextsSchema.optional(),
 });
-type Slide = z.infer<typeof slideSchema>;
 
 const stateSchema = z.object({
   metadata: z.object({
@@ -164,6 +151,12 @@ const stateSchema = z.object({
   }),
   slides: z.array(slideSchema),
 });
+
+/**
+ * State
+ */
+
+type Slide = z.infer<typeof slideSchema>;
 type State = z.infer<typeof stateSchema>;
 
 function createState(params: {
@@ -191,6 +184,14 @@ function setUpdatedAt(state: State): State {
 
 function addSlide(state: State, slide: Slide): State {
   state.slides.push(slide);
+  return setUpdatedAt(state);
+}
+
+function removeSlide(state: State, slideIndex: number): State {
+  if (slideIndex < 0 || slideIndex >= state.slides.length) {
+    throw new Error(`Invalid slide index: ${slideIndex}`);
+  }
+  state.slides.splice(slideIndex, 1);
   return setUpdatedAt(state);
 }
 
@@ -236,20 +237,24 @@ async function writeState(state: State): Promise<string> {
  * PowerPoint
  */
 
-function getPptxPath(name: string): string {
-  return path.join(STORAGE_DIR, `${name}.pptx`);
+function getPptxPath(outDir: string, name: string): string {
+  return path.join(outDir, `${name}.pptx`);
 }
 
-function getPdfPath(name: string): string {
-  return path.join(STORAGE_DIR, `${name}.pdf`);
+function getPdfPath(outDir: string, name: string): string {
+  return path.join(outDir, `${name}.pdf`);
 }
 
-function getPngPathTemplate(name: string): string {
-  return path.join(STORAGE_DIR, `${name}_slide_%d.png`);
+function getPngPathGlob(outDir: string, name: string): Glob {
+  return new Glob(path.join(outDir, `${name}_slide_*.png`));
 }
 
-function getPngPath(name: string, slideIndex: number): string {
-  return path.join(STORAGE_DIR, `${name}_slide_${slideIndex}.png`);
+function getPngPathTmpl(outDir: string, name: string): string {
+  return path.join(outDir, `${name}_slide_%d.png`);
+}
+
+function getPngPath(outDir: string, name: string, slideIndex: number): string {
+  return path.join(outDir, `${name}_slide_${slideIndex}.png`);
 }
 
 function createPptxFromState(state: State): PptxGenJS {
@@ -293,25 +298,42 @@ function createPptxFromState(state: State): PptxGenJS {
   return pptx;
 }
 
-async function writePptxFromState(state: State): Promise<string> {
+async function writePptxFromState(
+  state: State,
+  outDir: string
+): Promise<string> {
+  const outPath = getPptxPath(outDir, state.metadata.name);
   const pptx = createPptxFromState(state);
-  const pptxPath = getPptxPath(state.metadata.name);
-  await pptx.writeFile({ fileName: pptxPath });
-  return pptxPath;
+  await pptx.writeFile({ fileName: outPath });
+  return outPath;
 }
 
-async function convertPptxSlideToPng(
-  name: string,
-  slideIndex: number
-): Promise<void> {
-  const pptxPath = getPptxPath(name);
-  const pdfPath = getPdfPath(name);
-  const pdfDir = path.dirname(pdfPath);
-  const pngPathTemplate = getPngPathTemplate(name);
-
-  await $`soffice --headless --convert-to pdf --outdir ${pdfDir} ${pptxPath}`;
-  await $`magick ${pdfPath}[${slideIndex}] ${pngPathTemplate}`;
+async function writePptxSlidesToPng(
+  state: State,
+  outDir: string
+): Promise<string[]> {
+  const pptxPath = await writePptxFromState(state, outDir);
+  const pdfPath = getPdfPath(outDir, state.metadata.name);
+  const pngPathTmpl = getPngPathTmpl(outDir, state.metadata.name);
+  const pngPathGlob = getPngPathGlob(outDir, state.metadata.name);
+  await $`soffice --headless --convert-to pdf --outdir ${outDir} ${pptxPath}`;
+  await $`magick ${pdfPath} ${pngPathTmpl}`;
   await fs.unlink(pdfPath);
+  return Array.fromAsync(pngPathGlob.scan());
+}
+
+async function writePptxSlideToPng(
+  state: State,
+  slideIndex: number,
+  outDir: string
+): Promise<string> {
+  const pptxPath = await writePptxFromState(state, outDir);
+  const pdfPath = getPdfPath(outDir, state.metadata.name);
+  const pngPath = getPngPath(outDir, state.metadata.name, slideIndex);
+  await $`soffice --headless --convert-to pdf --outdir ${outDir} ${pptxPath}`;
+  await $`magick ${pdfPath}[${slideIndex}] ${pngPath}`;
+  await fs.unlink(pdfPath);
+  return pngPath;
 }
 
 /**
@@ -336,147 +358,8 @@ const server = new McpServer({
 });
 
 server.tool(
-  "create_presentation",
-  "Creates a new presentation file. You can specify a title and subject.",
-  {
-    name: z.string(),
-    title: z.string().optional(),
-    subject: z.string().optional(),
-  },
-  async ({ name, title, subject }) => {
-    try {
-      const state = createState({ name, title, subject });
-      const statePath = await writeState(state);
-      return okText(`Created presentation: ${statePath}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errText(`Failed to create presentation: ${message}`);
-    }
-  }
-);
-
-server.tool(
-  "save_as_pptx",
-  "Saves the presentation as a PPTX file.",
-  {
-    name: z.string(),
-  },
-  async ({ name }) => {
-    try {
-      const state = await readState(name);
-      const pptxFilePath = await writePptxFromState(state);
-      return okText(`Saved PPTX file: ${pptxFilePath}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errText(`Failed to save PPTX file: ${message}`);
-    }
-  }
-);
-
-server.tool(
-  "add_slide",
-  "Adds a new slide to the presentation. You can customize background color, text content, slide numbers, and more. Use the help_create_slide tool to get started.",
-  {
-    name: z.string(),
-    background: backgroundSchema.optional(),
-    color: z.string().optional(),
-    slideNumber: slideNumberSchema.optional(),
-    texts: slideTextsSchema.optional(),
-  },
-  async ({ name, background, color, slideNumber, texts }) => {
-    try {
-      const state = await readState(name);
-
-      const newSlide = slideSchema.safeParse({
-        background,
-        color,
-        slideNumber,
-        texts,
-      });
-      if (!newSlide.success) {
-        return errText(`Failed to add slide: ${newSlide.error.message}`);
-      }
-
-      const modifiedState = addSlide(state, newSlide.data);
-      await writeState(modifiedState);
-
-      return okText(
-        `Added slide ${state.slides.length} to presentation: ${state.metadata.name}`
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errText(`Failed to add slide: ${message}`);
-    }
-  }
-);
-
-server.tool(
-  "replace_slide",
-  "Replaces the slide at the specified index with new content. Use the help_create_slide tool to get started.",
-  {
-    name: z.string(),
-    slideIndex: z.number().int().min(0),
-    background: backgroundSchema.optional(),
-    color: z.string().optional(),
-    slideNumber: slideNumberSchema.optional(),
-    texts: slideTextsSchema.optional(),
-  },
-  async ({ name, slideIndex, background, color, slideNumber, texts }) => {
-    try {
-      const state = await readState(name);
-
-      const newSlide = slideSchema.safeParse({
-        background,
-        color,
-        slideNumber,
-        texts,
-      });
-      if (!newSlide.success) {
-        return errText(`Failed to replace slide: ${newSlide.error.message}`);
-      }
-
-      const modifiedState = replaceSlide(state, slideIndex, newSlide.data);
-      await writeState(modifiedState);
-
-      return okText(
-        `Replaced slide ${slideIndex} in presentation: ${state.metadata.name}`
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errText(`Failed to replace slide: ${message}`);
-    }
-  }
-);
-
-server.tool(
-  "get_slide_as_png",
-  "Exports the specified slide as a PNG image.",
-  {
-    name: z.string(),
-    slideIndex: z.number().int().min(0),
-  },
-  async ({ name, slideIndex }) => {
-    try {
-      const state = await readState(name);
-      if (slideIndex < 0 || slideIndex >= state.slides.length) {
-        return errText(`Invalid slide index: ${slideIndex}`);
-      }
-
-      await writePptxFromState(state);
-      await convertPptxSlideToPng(name, slideIndex);
-      const pngPath = getPngPath(name, slideIndex);
-
-      return okText(`PNG file is saved at: ${pngPath}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return errText(`Failed to get slide as PNG: ${message}`);
-    }
-  }
-);
-
-server.tool(
-  "help_create_slide",
-  "Get help for creating a presentation slide.",
+  "guide_slide_creation",
+  "Get guidelines for creating a presentation slide.",
   async () =>
     okText(`Follow these guidelines when generating presentation slides:
 
@@ -502,6 +385,226 @@ server.tool(
 - Item spacing: minimum 0.5 inches (≈9%)
 - Font sizes scaled to inch measurements (title: 40-48pt, body: 24-28pt)
 `)
+);
+
+server.tool(
+  "create_presentation",
+  "Creates a new presentation file. You can specify a `title` and `subject`. `name` must consist of alphanumeric characters, underscores, or hyphens.",
+  {
+    name: z.string(),
+    title: z.string().optional(),
+    subject: z.string().optional(),
+  },
+  async ({ name, title, subject }) => {
+    try {
+      const state = createState({ name, title, subject });
+      const statePath = await writeState(state);
+      return okText(`Presentation created: ${statePath}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to create presentation: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "add_slide",
+  "Adds a new slide to the presentation. Use the `slide_guidelines` tool to get started.",
+  {
+    name: z.string(),
+    background: backgroundSchema.optional(),
+    color: z.string().optional(),
+    slideNumber: slideNumberSchema.optional(),
+    texts: slideTextsSchema.optional(),
+  },
+  async ({ name, background, color, slideNumber, texts }) => {
+    try {
+      const state = await readState(name);
+
+      const newSlide = slideSchema.safeParse({
+        background,
+        color,
+        slideNumber,
+        texts,
+      });
+      if (!newSlide.success) {
+        return errText(`Failed to add slide: ${newSlide.error.message}`);
+      }
+
+      const modifiedState = addSlide(state, newSlide.data);
+      await writeState(modifiedState);
+
+      return okText(
+        `Slide ${state.slides.length} added to ${state.metadata.name}`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to add slide: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "get_slide",
+  "Gets the state of the specified slide.",
+  {
+    name: z.string(),
+    slideIndex: z.number().int().min(0),
+  },
+  async ({ name, slideIndex }) => {
+    try {
+      const state = await readState(name);
+      if (slideIndex < 0 || slideIndex >= state.slides.length) {
+        return errText(`Invalid slide index: ${slideIndex}`);
+      }
+
+      const slide = state.slides[slideIndex];
+      return okText(JSON.stringify(slide, null, 2));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to get slide: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "get_slides",
+  "Gets the state of all slides.",
+  {
+    name: z.string(),
+  },
+  async ({ name }) => {
+    try {
+      const state = await readState(name);
+      return okText(JSON.stringify(state.slides, null, 2));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to get slide list: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "remove_slide",
+  "Removes the slide at the specified index.",
+  {
+    name: z.string(),
+    slideIndex: z.number().int().min(0),
+  },
+  async ({ name, slideIndex }) => {
+    try {
+      const state = await readState(name);
+      if (slideIndex < 0 || slideIndex >= state.slides.length) {
+        return errText(`Invalid slide index: ${slideIndex}`);
+      }
+
+      const modifiedState = removeSlide(state, slideIndex);
+      await writeState(modifiedState);
+
+      return okText(`Slide ${slideIndex} removed from ${state.metadata.name}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to remove slide: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "replace_slide",
+  "Replaces the slide at the specified index with new content. Use the `slide_guidelines` tool to get started.",
+  {
+    name: z.string(),
+    slideIndex: z.number().int().min(0),
+    background: backgroundSchema.optional(),
+    color: z.string().optional(),
+    slideNumber: slideNumberSchema.optional(),
+    texts: slideTextsSchema.optional(),
+  },
+  async ({ name, slideIndex, background, color, slideNumber, texts }) => {
+    try {
+      const state = await readState(name);
+
+      const newSlide = slideSchema.safeParse({
+        background,
+        color,
+        slideNumber,
+        texts,
+      });
+      if (!newSlide.success) {
+        return errText(`Failed to replace slide: ${newSlide.error.message}`);
+      }
+
+      const modifiedState = replaceSlide(state, slideIndex, newSlide.data);
+      await writeState(modifiedState);
+
+      return okText(`Slide ${slideIndex} replaced in ${state.metadata.name}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to replace slide: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "export_presentation_as_pptx",
+  "Exports the presentation as a PPTX file. `outDir` must be an absolute path.",
+  {
+    name: z.string(),
+    outDir: z.string(),
+  },
+  async ({ name, outDir }) => {
+    try {
+      const state = await readState(name);
+      const outPath = await writePptxFromState(state, outDir);
+      return okText(`Saved PPTX file: ${outPath}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to save PPTX file: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "export_slide_as_png",
+  "Exports the specified slide as a PNG image. `outDir` must be an absolute path.",
+  {
+    name: z.string(),
+    slideIndex: z.number().int().min(0),
+    outDir: z.string(),
+  },
+  async ({ name, slideIndex, outDir }) => {
+    try {
+      const state = await readState(name);
+      if (slideIndex < 0 || slideIndex >= state.slides.length) {
+        return errText(`Invalid slide index: ${slideIndex}`);
+      }
+
+      const pngPath = await writePptxSlideToPng(state, slideIndex, outDir);
+      return okText(`Saved slide: ${pngPath}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to save slide: ${message}`);
+    }
+  }
+);
+
+server.tool(
+  "export_slides_as_png",
+  "Exports all slides as PNG images. `outDir` must be an absolute path.",
+  {
+    name: z.string(),
+    outDir: z.string(),
+  },
+  async ({ name, outDir }) => {
+    try {
+      const state = await readState(name);
+      const pngPaths = await writePptxSlidesToPng(state, outDir);
+      return okText(`Saved slides: ${pngPaths.join(", ")}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return errText(`Failed to save slides: ${message}`);
+    }
+  }
 );
 
 await ensureStateDir();
