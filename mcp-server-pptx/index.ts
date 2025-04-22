@@ -22,12 +22,10 @@ const STORAGE_DIR = path.resolve(env.STORAGE_DIR);
  */
 
 const fontSizeSchema = z.number().min(8).max(256);
-
 const backgroundSchema = z.object({
   color: z.string().optional(),
   transparency: z.number().min(0).max(100).optional(),
 });
-
 const slideNumberSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -35,7 +33,6 @@ const slideNumberSchema = z.object({
   fontFace: z.string().optional(),
   fontSize: fontSizeSchema.optional(),
 });
-
 const textUnderlineStyleSchema = z.enum([
   "dash",
   "dashHeavy",
@@ -55,18 +52,13 @@ const textUnderlineStyleSchema = z.enum([
   "wavyDbl",
   "wavyHeavy",
 ]);
-
 const textUnderlineSchema = z.object({
   style: textUnderlineStyleSchema.optional(),
   color: z.string().optional(),
 });
-
 const textAlignSchema = z.enum(["left", "center", "right"]);
-
 const textValignSchema = z.enum(["top", "middle", "bottom"]);
-
 const textBulletTypeSchema = z.enum(["number", "bullet"]);
-
 const textBulletNumberTypeSchema = z.enum([
   "alphaLcParenBoth",
   "alphaLcParenR",
@@ -85,7 +77,6 @@ const textBulletNumberTypeSchema = z.enum([
   "romanUcParenR",
   "romanUcPeriod",
 ]);
-
 const textBulletDetailSchema = z.object({
   type: textBulletTypeSchema.optional(),
   characterCode: z.string().optional(),
@@ -93,19 +84,15 @@ const textBulletDetailSchema = z.object({
   numberType: textBulletNumberTypeSchema.optional(),
   style: z.string().optional(),
 });
-
 const textBulletSchema = z.union([z.boolean(), textBulletDetailSchema]);
-
 const textFillSchema = z.object({
   color: z.string(),
 });
-
 const textHyperlinkSchema = z.object({
   url: z.string(),
   slide: z.number().optional(),
   tooltip: z.string().optional(),
 });
-
 const textOptionsSchema = z.object({
   // Position and size
   x: z.number().optional(),
@@ -126,21 +113,17 @@ const textOptionsSchema = z.object({
   fill: textFillSchema.optional(),
   hyperlink: textHyperlinkSchema.optional(),
 });
-
 const textContentSchema = z.object({
   text: z.string(),
   options: textOptionsSchema.optional(),
 });
-
-const slideTextsSchema = z.array(textContentSchema);
-
+const textContentsSchema = z.array(textContentSchema);
 const slideSchema = z.object({
   background: backgroundSchema.optional(),
   color: z.string().optional(),
   slideNumber: slideNumberSchema.optional(),
-  texts: slideTextsSchema.optional(),
+  texts: textContentsSchema.optional(),
 });
-
 const stateSchema = z.object({
   metadata: z.object({
     name: z.string(),
@@ -308,21 +291,7 @@ async function writePptxFromState(
   return outPath;
 }
 
-async function writePptxSlidesToPng(
-  state: State,
-  outDir: string
-): Promise<string[]> {
-  const pptxPath = await writePptxFromState(state, outDir);
-  const pdfPath = getPdfPath(outDir, state.metadata.name);
-  const pngPathTmpl = getPngPathTmpl(outDir, state.metadata.name);
-  const pngPathGlob = getPngPathGlob(outDir, state.metadata.name);
-  await $`soffice --headless --convert-to pdf --outdir ${outDir} ${pptxPath}`;
-  await $`magick ${pdfPath} ${pngPathTmpl}`;
-  await fs.unlink(pdfPath);
-  return Array.fromAsync(pngPathGlob.scan());
-}
-
-async function writePptxSlideToPng(
+async function writeSlidePngFromState(
   state: State,
   slideIndex: number,
   outDir: string
@@ -334,6 +303,20 @@ async function writePptxSlideToPng(
   await $`magick ${pdfPath}[${slideIndex}] ${pngPath}`;
   await fs.unlink(pdfPath);
   return pngPath;
+}
+
+async function writeAllSlidePngFromState(
+  state: State,
+  outDir: string
+): Promise<string[]> {
+  const pptxPath = await writePptxFromState(state, outDir);
+  const pdfPath = getPdfPath(outDir, state.metadata.name);
+  const pngPathTmpl = getPngPathTmpl(outDir, state.metadata.name);
+  const pngPathGlob = getPngPathGlob(outDir, state.metadata.name);
+  await $`soffice --headless --convert-to pdf --outdir ${outDir} ${pptxPath}`;
+  await $`magick ${pdfPath} ${pngPathTmpl}`;
+  await fs.unlink(pdfPath);
+  return Array.fromAsync(pngPathGlob.scan());
 }
 
 /**
@@ -353,6 +336,36 @@ function errText(text: string): CallToolResult {
 }
 
 /**
+ * Guidelines
+ */
+
+const SLIDE_CREATION_GUIDELINE = `
+Follow guidelines below when creating presentation slides:
+
+1. Basic Slide Dimensions
+- Slide layout: 10 x 5.625 inches
+- Coordinate system: Origin (0,0) at top-left, specified in inches (number) or percentages (string)
+
+2. Margins and Safe Areas
+- Vertical margins: >= 0.5 inches
+- Horizontal margins: >= 0.5 inches
+- Usable content area: 9.0 x 4.625 inches
+- Bottom safe area: avoid placing content within 0.75 inches (≈13%) from bottom
+
+3. Basic Layout (Inch Specification)
+- Title position: 0.5 <= y <= 1.5
+- Subtitle position: 1.75 <= y <= 2.25
+- Main content start: y = 2.5
+- Content lower limit: y = 4.875
+- Standard textbox width: w = 8.5
+
+5. Layout Principles
+- Slide numbers: Always enable slide numbers
+- Item spacing: minimum 0.5 inches (≈9%)
+- Font sizes scaled to inch measurements (title: 40-48pt, body: 24-28pt)
+`.trim();
+
+/**
  * Main
  */
 
@@ -367,31 +380,7 @@ server.tool(
     "Provides guidelines for creating presentation slides.",
     "You must reference this tool when adding or replacing slides.",
   ]),
-  async () =>
-    okText(`Follow these guidelines when generating presentation slides:
-
-1. Basic Slide Dimensions
-- Default layout: 10 x 5.625 inches (16:9 ratio)
-- Coordinate system: Origin (0,0) at top-left, specified in inches (number) or percentages (string)
-
-2. Margins and Safe Areas
-- Vertical margins: minimum 0.5 inches
-- Horizontal margins: minimum 0.75 inches
-- Usable content area: 8.5 x 4.625 inches
-- Bottom safe area: avoid placing content within 0.75 inches (≈13%) from bottom
-
-3. Basic Layout (Inch Specification)
-- Title position: y=0.5 to 1.5
-- Subtitle position: y=1.75 to 2.25
-- Main content start: y=2.5
-- Content lower limit: y=4.875 (0.75 inches from bottom)
-- Standard textbox width: w=8.5 (0.75 inches margins)
-
-5. Layout Principles
-- Slide numbers: Always enable slide numbers
-- Item spacing: minimum 0.5 inches (≈9%)
-- Font sizes scaled to inch measurements (title: 40-48pt, body: 24-28pt)
-`)
+  async () => okText(SLIDE_CREATION_GUIDELINE)
 );
 
 server.tool(
@@ -429,7 +418,7 @@ server.tool(
     background: backgroundSchema.optional(),
     color: z.string().optional(),
     slideNumber: slideNumberSchema.optional(),
-    texts: slideTextsSchema.optional(),
+    texts: textContentsSchema.optional(),
   },
   async ({ name, background, color, slideNumber, texts }) => {
     try {
@@ -535,7 +524,7 @@ server.tool(
     background: backgroundSchema.optional(),
     color: z.string().optional(),
     slideNumber: slideNumberSchema.optional(),
-    texts: slideTextsSchema.optional(),
+    texts: textContentsSchema.optional(),
   },
   async ({ name, slideIndex, background, color, slideNumber, texts }) => {
     try {
@@ -602,7 +591,7 @@ server.tool(
         return errText(`Invalid slide index: ${slideIndex}`);
       }
 
-      const pngPath = await writePptxSlideToPng(state, slideIndex, outDir);
+      const pngPath = await writeSlidePngFromState(state, slideIndex, outDir);
       return okText(`Saved slide: ${pngPath}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -624,7 +613,7 @@ server.tool(
   async ({ name, outDir }) => {
     try {
       const state = await readState(name);
-      const pngPaths = await writePptxSlidesToPng(state, outDir);
+      const pngPaths = await writeAllSlidePngFromState(state, outDir);
       return okText(`Saved slides: ${pngPaths.join(", ")}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
